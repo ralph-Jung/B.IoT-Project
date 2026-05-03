@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/biot_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    url: jdbc:postgresql://localhost:5432/biot_db
+    user: postgres
+    password: postgres
+    locations: classpath:db/migration
+    default-schema: public
+
+logging:
+  level:
+    org.flywaydb: DEBUG
