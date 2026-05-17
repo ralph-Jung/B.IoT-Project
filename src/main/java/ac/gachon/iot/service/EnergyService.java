@@ -4,14 +4,17 @@ import ac.gachon.iot.domain.entity.ControlLog;
 import ac.gachon.iot.domain.entity.EnergyDaily;
 import ac.gachon.iot.domain.enums.DeviceStatus;
 import ac.gachon.iot.domain.repository.ControlLogRepository;
+import ac.gachon.iot.domain.repository.DeviceRepository;
 import ac.gachon.iot.domain.repository.EnergyDailyRepository;
 import ac.gachon.iot.dto.EnergyDailyResponse;
+import ac.gachon.iot.dto.EnergyEfficiencyResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,11 +24,23 @@ public class EnergyService {
 
     private final ControlLogRepository controlLogRepository;
     private final EnergyDailyRepository energyDailyRepository;
+    private final DeviceRepository deviceRepository;
 
     public EnergyDailyResponse findDailyUsage() {
         EnergyDaily energyDaily = getOrCreateToday();
         Double addedWh = calculateAdditional(energyDaily);
         return updateAndReturn(energyDaily, addedWh);
+    }
+
+    public EnergyEfficiencyResponse findTotalMaxWhPerDay() {
+        EnergyDaily energyDaily = getOrCreateToday();
+        Double actualWh = calculateAdditional(energyDaily);
+        Double maxWh = deviceRepository.findTotalMaxWhPerDay();
+
+        double efficiency = (maxWh - actualWh) / maxWh * 100;
+        return EnergyEfficiencyResponse.builder()
+                .efficiency(Math.round(efficiency))
+                .build();
     }
 
 
@@ -36,7 +51,7 @@ public class EnergyService {
                         EnergyDaily.builder()
                                 .date(LocalDate.now())
                                 .totalWh(0.0)
-                                .lastCalculatedAt(OffsetDateTime.now())
+                                .lastCalculatedAt(LocalDate.now().atStartOfDay().atOffset(ZoneOffset.UTC))
                                 .build()));
     }
 
