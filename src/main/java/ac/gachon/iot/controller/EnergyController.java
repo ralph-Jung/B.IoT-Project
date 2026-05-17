@@ -1,6 +1,7 @@
 package ac.gachon.iot.controller;
 
 import ac.gachon.iot.dto.EnergyDailyResponse;
+import ac.gachon.iot.dto.EnergyEfficiencyResponse;
 import ac.gachon.iot.service.EnergyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +21,8 @@ public class EnergyController {
     }
 
     @GetMapping("/efficiency")
-    public void getEnergyEfficiency() {
+    public EnergyEfficiencyResponse getEnergyEfficiency() {
+        return energyService.findTotalMaxWhPerDay();
     }
+
 }
