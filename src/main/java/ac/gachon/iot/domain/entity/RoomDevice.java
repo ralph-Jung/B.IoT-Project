@@ -3,12 +3,8 @@ package ac.gachon.iot.domain.entity;
 import ac.gachon.iot.domain.enums.ControlMode;
 import ac.gachon.iot.domain.enums.DeviceStatus;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 
-import java.io.Serializable;
 import java.time.OffsetDateTime;
 
 

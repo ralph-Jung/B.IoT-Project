@@ -1,7 +1,9 @@
 package ac.gachon.iot.domain.entity;
 
+import ac.gachon.iot.domain.enums.SensorStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
+import org.springframework.data.annotation.CreatedDate;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -23,11 +25,14 @@ public class SensorData {
 
     private BigDecimal humidity;
 
-    private short motion;
+    private Short motion;
 
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private SensorStatus status;
 
-    private OffsetDateTime createdAt = OffsetDateTime.now();
+    @CreatedDate
+    private OffsetDateTime createdAt;
 
 
 }
