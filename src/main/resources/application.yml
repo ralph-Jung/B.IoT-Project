@@ -24,6 +24,7 @@ spring:
     password: postgres
     locations: classpath:db/migration
     default-schema: public
+    repair-on-migrate: true
 
 logging:
   level:
