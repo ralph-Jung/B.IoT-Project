@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Entity
 @Getter
@@ -18,4 +19,7 @@ public class Room {
     private String name;
 
     private Integer floor;
+
+    @OneToMany(mappedBy = "room")
+    private List<RoomDevice> roomDevices;
 }
