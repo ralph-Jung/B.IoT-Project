@@ -1,5 +1,9 @@
 package ac.gachon.iot.config;
 
+import ac.gachon.iot.dto.ErrorResponse;
+import io.swagger.v3.core.converter.AnnotatedType;
+import io.swagger.v3.core.converter.ModelConverters;
+import io.swagger.v3.core.converter.ResolvedSchema;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
@@ -25,15 +29,22 @@ public class OpenApiConfig {
         Content errorContent = new Content().addMediaType("application/json",
                 new MediaType().schema(new Schema<>().$ref("#/components/schemas/ErrorResponse")));
 
+        ResolvedSchema resolvedSchema = ModelConverters.getInstance().resolveAsResolvedSchema(new AnnotatedType(ErrorResponse.class));
+
+        Components components = new Components()
+                .addResponses("400", new ApiResponse().description("잘못된 요청").content(errorContent))
+                .addResponses("403", new ApiResponse().description("권한 없음").content(errorContent))
+                .addResponses("404", new ApiResponse().description("데이터 없음").content(errorContent))
+                .addSecuritySchemes("bearerAuth", securityScheme)
+                .addSchemas("ErrorResponse", resolvedSchema.schema);
+
+        resolvedSchema.referencedSchemas.forEach(components::addSchemas);
+
         return new OpenAPI()
                 .info(new Info()
                         .title("B.IoT API")
                         .description("IoT Backend API")
                         .version("v1.0.0"))
-                .components(new Components()
-                        .addResponses("400", new ApiResponse().description("잘못된 요청").content(errorContent))
-                        .addResponses("403", new ApiResponse().description("권한 없음").content(errorContent))
-                        .addResponses("404", new ApiResponse().description("데이터 없음").content(errorContent))
-                        .addSecuritySchemes("bearerAuth", securityScheme));
+                .components(components);
     }
 }

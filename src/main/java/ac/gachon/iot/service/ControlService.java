@@ -46,7 +46,7 @@ public class ControlService {
     }
 
     // 제어 이력 추가하기
-    public void createControlLog(CreateControlLogRequest request) {
+    public ControlLogResponse createControlLog(CreateControlLogRequest request) {
         //  해당 room 객체 찾아오기
         Room room = roomRepository.findById(Long.parseLong(request.getRoom_id())).orElseThrow(() -> new NotFoundException("해당 Room 정보를 찾을 수 없습니다."));
 
@@ -56,8 +56,7 @@ public class ControlService {
         DeviceStatus deviceStatus = (request.getAction().equals("ON") ? DeviceStatus.ON : DeviceStatus.OFF);
 
         ControlMode controlMode = ControlMode.MANUAL;
-
-        controlLogRepository.save(
+        ControlLog saved = controlLogRepository.save(
                 ControlLog.builder()
                         .room(room)
                         .device(device)
@@ -65,6 +64,11 @@ public class ControlService {
                         .type(controlMode)
                         .build()
         );
+
+        // saved 를 return 할 수도 있지만 controller 까지 controlLog 라는 엔티티를 보여주는 것은 좋은 설계가 아니므로 DTO로 감싸서 주기
+        // from 메서드를 static 으로 지정했기 때문에 클래스를 통해서 바로 접근이 가능하다
+        // 이런 변환 팩토리 메서드는 항상 static 으로 정의하는게 관례
+        return ControlLogResponse.from(saved);
 
     }
 
