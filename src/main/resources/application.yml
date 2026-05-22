@@ -46,6 +46,24 @@ jwt:
 timezone:
   identifier: ${TIMEZONE_IDENTIFIER}
 
+mqtt:
+  broker-url: ${MQTT_BROKER_URL:tcp://mosquitto:1883}
+  client-id: ${MQTT_CLIENT_ID:iot-backend-subscriber}
+  username: ${MQTT_USERNAME:}
+  password: ${MQTT_PASSWORD:}
+  topic: sensors/+/data
+  qos: 1
+  connection-timeout: 10
+  keep-alive-interval: 60
+  clean-session: true
+
+sensor:
+  threshold:
+    temperature:
+      max: 30.0
+    humidity:
+      max: 80.0
+    
 management:
   endpoints:
     web:
@@ -57,3 +75,5 @@ management:
   metrics:
     tags:
       application: ${spring.application.name:iot-backend}
+
+
