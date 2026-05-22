@@ -28,7 +28,9 @@ spring:
 
 logging:
   level:
-    org.flywaydb: DEBUG'
+    org.flywaydb: DEBUG
+  file:
+    name: ./logs/iot-backend.log
 
 springdoc:
   swagger-ui:
@@ -43,3 +45,15 @@ jwt:
 
 timezone:
   identifier: ${TIMEZONE_IDENTIFIER}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  endpoint:
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name:iot-backend}

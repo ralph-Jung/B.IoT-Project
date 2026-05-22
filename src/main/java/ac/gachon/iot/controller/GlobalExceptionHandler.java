@@ -4,6 +4,7 @@ import ac.gachon.iot.dto.ErrorResponse;
 import ac.gachon.iot.exception.InvalidCredentialsException;
 import ac.gachon.iot.exception.NotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -17,6 +18,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import java.time.OffsetDateTime;
 import java.util.List;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
@@ -24,12 +26,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     // 타입은 ResponseEntity<ErrorResponse> 이렇게 되어 있음
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredential(InvalidCredentialsException ex, HttpServletRequest request) {
+        log.warn("Invalid credentials:{}", ex.getMessage());
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request.getRequestURI(), null);
     }
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NotFoundException ex, HttpServletRequest request) {
+        log.warn("Not Found: {}", ex.getMessage());
         return build(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI(), null);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleUnexcepted(Exception ex, HttpServletRequest request) {
+        log.error("Unexcepted error", ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다. ", request.getRequestURI(), null);
     }
 
     // 이거는 SpringMVC 내부적으로 발생하는 예외를 동일한 형식으로 만들기 위한 메서드이다
