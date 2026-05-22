@@ -26,4 +26,11 @@ public class AlertLog {
 
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
+    public static AlertLog create(Sensor sensor, AlertType type, String message) {
+        AlertLog log = new AlertLog();
+        log.sensor = sensor;
+        log.type = type;
+        log.message = message;
+        return log;
+    }
 }
