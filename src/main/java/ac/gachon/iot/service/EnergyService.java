@@ -4,12 +4,13 @@ import ac.gachon.iot.domain.entity.ControlLog;
 import ac.gachon.iot.domain.entity.EnergyDaily;
 import ac.gachon.iot.domain.enums.DeviceStatus;
 import ac.gachon.iot.domain.repository.ControlLogRepository;
-import ac.gachon.iot.domain.repository.DeviceRepository;
 import ac.gachon.iot.domain.repository.EnergyDailyRepository;
 import ac.gachon.iot.dto.EnergyDailyResponse;
 import ac.gachon.iot.dto.EnergyEfficiencyResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import ac.gachon.iot.domain.enums.ControlMode;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -24,22 +25,30 @@ public class EnergyService {
 
     private final ControlLogRepository controlLogRepository;
     private final EnergyDailyRepository energyDailyRepository;
-    private final DeviceRepository deviceRepository;
 
     public EnergyDailyResponse findDailyUsage() {
         EnergyDaily energyDaily = getOrCreateToday();
         Double addedWh = calculateAdditional(energyDaily);
-        return updateAndReturn(energyDaily, addedWh);
+        Double yesterdayTotalWh = energyDailyRepository.findByDate(LocalDate.now().minusDays(1))
+                .map(EnergyDaily::getTotalWh)
+                .orElse(null);
+        return updateAndReturn(energyDaily, addedWh, yesterdayTotalWh);
     }
 
     public EnergyEfficiencyResponse findTotalMaxWhPerDay() {
-        EnergyDaily energyDaily = getOrCreateToday();
-        Double actualWh = calculateAdditional(energyDaily);
-        Double maxWh = deviceRepository.findTotalMaxWhPerDay();
+        OffsetDateTime start = LocalDate.now().atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime end = OffsetDateTime.now();
 
-        double efficiency = (maxWh - actualWh) / maxWh * 100;
+        long total = controlLogRepository.countByCreatedAtBetween(start, end);
+        if (total == 0) {
+            return EnergyEfficiencyResponse.builder().efficiency(0L).build();
+        }
+
+        long autoCount = controlLogRepository.countByTypeAndCreatedAtBetween(ControlMode.AUTO, start, end);
+        long ratio = Math.round(autoCount * 100.0 / total);
+
         return EnergyEfficiencyResponse.builder()
-                .efficiency(Math.round(efficiency))
+                .efficiency(ratio)
                 .build();
     }
 
@@ -80,10 +89,10 @@ public class EnergyService {
                         .map(ControlLog::getCreatedAt)
                         .orElseGet(() ->
                                 controlLogRepository
-                                        .findTopByRoomAndDeviceOrderByCreatedAtDesc(
-                                                log.getRoom(), log.getDevice())
+                                        .findTopByRoomAndDeviceAndActionAndCreatedAtBeforeOrderByCreatedAtDesc(
+                                                log.getRoom(), log.getDevice(), DeviceStatus.ON, log.getCreatedAt())
                                         .map(ControlLog::getCreatedAt)
-                                        .orElse(start)  // 그것도 없으면 start로 대체
+                                        .orElse(start)
                         );
 
                 // ON ~ OFF 시간 계산 → Wh 변환
@@ -112,14 +121,19 @@ public class EnergyService {
         return addedWh;
     }
 
-    private EnergyDailyResponse updateAndReturn(EnergyDaily today, Double addedWh) {
+    private EnergyDailyResponse updateAndReturn(EnergyDaily today, Double addedWh, Double yesterdayTotalWh) {
         today.setTotalWh(today.getTotalWh() + addedWh);
         today.setLastCalculatedAt(OffsetDateTime.now());
         energyDailyRepository.save(today);
 
+        Double diffWh = yesterdayTotalWh != null
+                ? (today.getTotalWh() - yesterdayTotalWh) / 1000
+                : null;
+
         return EnergyDailyResponse.builder()
                 .totalWh(today.getTotalWh() / 1000)
                 .date(today.getLastCalculatedAt())
+                .yesterdayDiffWh(diffWh)
                 .build();
     }
 

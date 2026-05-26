@@ -3,6 +3,8 @@ package ac.gachon.iot.domain.repository;
 import ac.gachon.iot.domain.entity.ControlLog;
 import ac.gachon.iot.domain.entity.Device;
 import ac.gachon.iot.domain.entity.Room;
+import ac.gachon.iot.domain.enums.ControlMode;
+import ac.gachon.iot.domain.enums.DeviceStatus;
 import ac.gachon.iot.dto.ControlLogResponse;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -17,7 +19,11 @@ public interface ControlLogRepository extends JpaRepository<ControlLog, Long> {
     @Query("SELECT c FROM ControlLog c JOIN FETCH c.room JOIN FETCH c.device WHERE c.createdAt BETWEEN :start AND :end")
     List<ControlLog> findByCreatedAtBetween(OffsetDateTime start, OffsetDateTime end);
 
-    Optional<ControlLog> findTopByRoomAndDeviceOrderByCreatedAtDesc(Room room, Device device);
+    Optional<ControlLog> findTopByRoomAndDeviceAndActionAndCreatedAtBeforeOrderByCreatedAtDesc(Room room, Device device, DeviceStatus action, OffsetDateTime before);
+
+    long countByTypeAndCreatedAtBetween(ControlMode type, OffsetDateTime start, OffsetDateTime end);
+
+    long countByCreatedAtBetween(OffsetDateTime start, OffsetDateTime end);
 
     @Query("""
             SELECT a

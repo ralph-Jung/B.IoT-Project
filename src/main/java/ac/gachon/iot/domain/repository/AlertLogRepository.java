@@ -13,7 +13,7 @@ import java.util.List;
 public interface AlertLogRepository extends JpaRepository<AlertLog, Long> {
 
     @Query("""
-            select new ac.gachon.iot.dto.AlertLogResponse(a.id,a.type,a.message,a.createdAt,s.name)
+            select new ac.gachon.iot.dto.AlertLogResponse(a.id,a.type,a.message,a.createdAt,r.name)
                         from AlertLog a join a.sensor s join s.room r
             """)
     List<AlertLogResponse> findALlAlerts();

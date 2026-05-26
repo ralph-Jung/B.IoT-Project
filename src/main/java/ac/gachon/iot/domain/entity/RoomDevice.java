@@ -36,4 +36,9 @@ public class RoomDevice {
 
     @Column(nullable = false)
     private OffsetDateTime updatedAt = OffsetDateTime.now();
+
+    public void updateStatus(DeviceStatus status) {
+        this.status = status;
+        this.updatedAt = OffsetDateTime.now();
+    }
 }
