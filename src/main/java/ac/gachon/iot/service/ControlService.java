@@ -15,9 +15,9 @@ import ac.gachon.iot.dto.CreateControlLogRequest;
 import ac.gachon.iot.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.crossstore.ChangeSetPersister;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -33,7 +33,7 @@ public class ControlService {
     private final RoomDeviceRepository roomDeviceRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
-    // 모든 제어 이력 가져오기
+    @Transactional(readOnly = true)
     public List<ControlLogResponse> findAllControlLogs() {
 
         List<ControlLog> allLogs = controlLogRepository.findAllControlLog();
@@ -50,7 +50,7 @@ public class ControlService {
 
     }
 
-    // 제어 이력 추가하기
+    @Transactional
     public ControlLogResponse createControlLog(CreateControlLogRequest request) {
         //  해당 room 객체 찾아오기
         Room room = roomRepository.findById(Long.parseLong(request.getRoom_id())).orElseThrow(() -> new NotFoundException("해당 Room 정보를 찾을 수 없습니다."));
@@ -73,6 +73,7 @@ public class ControlService {
 
     }
 
+    @Transactional
     public void autoControl(Room room, Device device, DeviceStatus action) {
         controlLogRepository.save(
                 ControlLog.builder()

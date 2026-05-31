@@ -9,6 +9,7 @@ import ac.gachon.iot.dto.EnergyDailyResponse;
 import ac.gachon.iot.dto.EnergyEfficiencyResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import ac.gachon.iot.domain.enums.ControlMode;
 
@@ -26,6 +27,7 @@ public class EnergyService {
     private final ControlLogRepository controlLogRepository;
     private final EnergyDailyRepository energyDailyRepository;
 
+    @Transactional
     public EnergyDailyResponse findDailyUsage() {
         EnergyDaily energyDaily = getOrCreateToday();
         Double addedWh = calculateAdditional(energyDaily);
@@ -35,6 +37,7 @@ public class EnergyService {
         return updateAndReturn(energyDaily, addedWh, yesterdayTotalWh);
     }
 
+    @Transactional(readOnly = true)
     public EnergyEfficiencyResponse findTotalMaxWhPerDay() {
         OffsetDateTime start = LocalDate.now().atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime end = OffsetDateTime.now();
