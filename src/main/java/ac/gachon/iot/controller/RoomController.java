@@ -1,6 +1,8 @@
 package ac.gachon.iot.controller;
 
+import ac.gachon.iot.domain.repository.RoomDeviceRepository;
 import ac.gachon.iot.dto.AllRoomsResponse;
+import ac.gachon.iot.dto.RoomDeviceStatusResponse;
 import ac.gachon.iot.dto.RoomSensorLatestResponse;
 import ac.gachon.iot.service.RoomService;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -18,6 +20,7 @@ import java.util.List;
 public class RoomController {
 
     private final RoomService roomService;
+    private final RoomDeviceRepository roomDeviceRepository;
 
     @GetMapping("")
     public List<AllRoomsResponse> getAllRooms() {
@@ -28,7 +31,12 @@ public class RoomController {
     public RoomSensorLatestResponse getLatestSensorsByRoom(@Parameter(description = "방 ID", required = true)
                                                            @PathVariable Long roomId) {
         return roomService.findLatestSensorsByRoom(roomId);
+    }
 
-
+    @GetMapping("{roomId}/devices")
+    public List<RoomDeviceStatusResponse> getRoomDeviceStatuses(@PathVariable Long roomId) {
+        return roomDeviceRepository.findByRoomId(roomId).stream()
+                .map(RoomDeviceStatusResponse::from)
+                .toList();
     }
 }

@@ -2,6 +2,19 @@ spring:
   jackson:
     time-zone: UTC
 
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
   datasource:
     url: jdbc:postgresql://localhost:5432/biot_db
     username: postgres
@@ -40,7 +53,7 @@ springdoc:
     path: /v3/api-docs
 
 jwt:
-  secret: ${JWT_SECRET:K7gNU3sdo+OL0wNhqoVWhr3g6s1xYv72ol/pe/Unols=}
+  secret: ${JWT_SECRET}
   expiration: 86400000
 
 timezone:
@@ -63,6 +76,10 @@ sensor:
       max: 30.0
     humidity:
       max: 80.0
+
+alert:
+  email:
+    recipient: ${ALERT_EMAIL_RECIPIENT:}
     
 management:
   endpoints:

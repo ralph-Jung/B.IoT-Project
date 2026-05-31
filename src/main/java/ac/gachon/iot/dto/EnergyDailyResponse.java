@@ -14,4 +14,6 @@ public class EnergyDailyResponse {
 
     private Double totalWh;
 
+    private Double yesterdayDiffWh;
+
 }

@@ -7,14 +7,17 @@ import ac.gachon.iot.domain.enums.ControlMode;
 import ac.gachon.iot.domain.enums.DeviceStatus;
 import ac.gachon.iot.domain.repository.ControlLogRepository;
 import ac.gachon.iot.domain.repository.DeviceRepository;
+import ac.gachon.iot.domain.repository.RoomDeviceRepository;
 import ac.gachon.iot.domain.repository.RoomRepository;
 import ac.gachon.iot.dto.ControlLogResponse;
+import ac.gachon.iot.dto.ControlMessage;
 import ac.gachon.iot.dto.CreateControlLogRequest;
 import ac.gachon.iot.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.crossstore.ChangeSetPersister;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -27,8 +30,10 @@ public class ControlService {
     private final ControlLogRepository controlLogRepository;
     private final RoomRepository roomRepository;
     private final DeviceRepository deviceRepository;
+    private final RoomDeviceRepository roomDeviceRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
-    // 모든 제어 이력 가져오기
+    @Transactional(readOnly = true)
     public List<ControlLogResponse> findAllControlLogs() {
 
         List<ControlLog> allLogs = controlLogRepository.findAllControlLog();
@@ -45,7 +50,7 @@ public class ControlService {
 
     }
 
-    // 제어 이력 추가하기
+    @Transactional
     public ControlLogResponse createControlLog(CreateControlLogRequest request) {
         //  해당 room 객체 찾아오기
         Room room = roomRepository.findById(Long.parseLong(request.getRoom_id())).orElseThrow(() -> new NotFoundException("해당 Room 정보를 찾을 수 없습니다."));
@@ -55,21 +60,48 @@ public class ControlService {
 
         DeviceStatus deviceStatus = (request.getAction().equals("ON") ? DeviceStatus.ON : DeviceStatus.OFF);
 
-        ControlMode controlMode = ControlMode.MANUAL;
         ControlLog saved = controlLogRepository.save(
                 ControlLog.builder()
                         .room(room)
                         .device(device)
                         .action(deviceStatus)
-                        .type(controlMode)
+                        .type(ControlMode.MANUAL)
                         .build()
         );
-
-        // saved 를 return 할 수도 있지만 controller 까지 controlLog 라는 엔티티를 보여주는 것은 좋은 설계가 아니므로 DTO로 감싸서 주기
-        // from 메서드를 static 으로 지정했기 때문에 클래스를 통해서 바로 접근이 가능하다
-        // 이런 변환 팩토리 메서드는 항상 static 으로 정의하는게 관례
+        updateRoomDeviceStatus(room, device, deviceStatus);
         return ControlLogResponse.from(saved);
 
+    }
+
+    @Transactional
+    public void autoControl(Room room, Device device, DeviceStatus action) {
+        controlLogRepository.save(
+                ControlLog.builder()
+                        .room(room)
+                        .device(device)
+                        .action(action)
+                        .type(ControlMode.AUTO)
+                        .build()
+        );
+        updateRoomDeviceStatus(room, device, action);
+        log.info("Auto control executed. room={}, device={}, action={}", room.getName(), device.getName(), action);
+
+        messagingTemplate.convertAndSend("/topic/rooms/" + room.getId() + "/control",
+                ControlMessage.builder()
+                        .roomId(room.getId())
+                        .deviceName(device.getName())
+                        .action(action.name())
+                        .type("AUTO")
+                        .build()
+        );
+    }
+
+    private void updateRoomDeviceStatus(Room room, Device device, DeviceStatus status) {
+        roomDeviceRepository.findByRoomAndDevice(room, device)
+                .ifPresent(rd -> {
+                    rd.updateStatus(status);
+                    roomDeviceRepository.save(rd);
+                });
     }
 
 }

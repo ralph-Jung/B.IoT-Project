@@ -16,7 +16,6 @@ public class AlertLogService {
     private final AlertLogRepository alertLogRepository;
 
     public List<AlertLogResponse> findAllAlerts() {
-        List<AlertLogResponse> list = alertLogRepository.findALlAlerts();
         return alertLogRepository.findALlAlerts();
     }
 }

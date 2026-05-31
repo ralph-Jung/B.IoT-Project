@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>스마트 빌딩 관제 대시보드</title>
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f5f4;
+      --bg-tertiary: #f0efed;
+      --bg-info: #e6f1fb;
+      --bg-success: #eaf3de;
+      --bg-warning: #faeeda;
+      --bg-danger: #fcebeb;
+      --text-primary: #1a1a18;
+      --text-secondary: #5f5e5a;
+      --text-info: #185fa5;
+      --text-success: #3b6d11;
+      --text-warning: #854f0b;
+      --text-danger: #a32d2d;
+      --border: rgba(0,0,0,0.12);
+      --border-info: rgba(24,95,165,0.3);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1c1c1a;
+        --bg-secondary: #252523;
+        --bg-tertiary: #2c2c2a;
+        --bg-info: #0c2a4a;
+        --bg-success: #162a08;
+        --bg-warning: #2a1a04;
+        --bg-danger: #2a0e0e;
+        --text-primary: #e8e6df;
+        --text-secondary: #9c9a92;
+        --text-info: #85b7eb;
+        --text-success: #97c459;
+        --text-warning: #fac775;
+        --text-danger: #f09595;
+        --border: rgba(255,255,255,0.1);
+        --border-info: rgba(133,183,235,0.3);
+      }
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .dashboard { max-width: 900px; margin: 0 auto; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .topbar h1 { font-size: 18px; font-weight: 500; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.5rem; }
+    .summary-card { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 1rem; }
+    .summary-card .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+    .summary-card .value { font-size: 22px; font-weight: 500; }
+    .summary-card .value.danger { color: var(--text-danger); }
+    .summary-card .value.success { color: var(--text-success); }
+    .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem; }
+    .card { background: var(--bg-primary); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; }
+    .card-title { font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; }
+    .room-list { display: flex; flex-direction: column; gap: 8px; }
+    .room-item { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 10px 12px; }
+    .room-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .room-name { font-size: 14px; font-weight: 500; }
+    .room-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .room-bottom { display: flex; gap: 6px; }
+    .badge { font-size: 11px; padding: 3px 8px; border-radius: var(--radius-md); font-weight: 500; }
+    .badge.normal { background: var(--bg-success); color: var(--text-success); }
+    .badge.anomaly { background: var(--bg-danger); color: var(--text-danger); }
+    .badge.empty { background: var(--bg-secondary); color: var(--text-secondary); border: 0.5px solid var(--border); }
+    .ctrl-btn {
+      font-size: 12px; padding: 5px 12px; border-radius: var(--radius-md);
+      border: 0.5px solid var(--border); cursor: pointer; font-weight: 500;
+      background: var(--bg-primary); color: var(--text-secondary); transition: all 0.15s;
+    }
+    .ctrl-btn:hover { background: var(--bg-secondary); }
+    .ctrl-btn.on { background: var(--bg-info); color: var(--text-info); border-color: var(--border-info); }
+    .alert-list { display: flex; flex-direction: column; gap: 8px; height: 320px; overflow-y: auto; }
+    .alert-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--bg-secondary); border-radius: var(--radius-md); }
+    .alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+    .alert-dot.danger { background: var(--text-danger); }
+    .alert-dot.warning { background: var(--text-warning); }
+    .alert-title { font-size: 13px; font-weight: 500; }
+    .alert-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .energy-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; margin-bottom: 1.5rem; }
+    .energy-card { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 1rem; }
+    .energy-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+    .energy-value { font-size: 20px; font-weight: 500; }
+    .energy-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 2px; }
+    .log-list { display: flex; flex-direction: column; gap: 6px; height: 258px; overflow-y: auto; }
+    .log-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-secondary); border-radius: var(--radius-md); }
+    .log-text { font-size: 13px; }
+    .log-right { display: flex; gap: 8px; align-items: center; }
+    .log-type { font-size: 11px; padding: 2px 6px; border-radius: var(--radius-md); }
+    .log-type.auto { background: var(--bg-info); color: var(--text-info); }
+    .log-type.manual { background: var(--bg-warning); color: var(--text-warning); }
+    .log-time { font-size: 12px; color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+
+    <div class="topbar">
+      <h1>스마트 빌딩 관제 대시보드</h1>
+      <div style="display:flex;align-items:center;gap:16px;">
+        <span id="clock" style="font-size:13px;color:var(--text-secondary)"></span>
+        <button onclick="logout()" style="font-size:12px;padding:5px 12px;border-radius:var(--radius-md);border:0.5px solid var(--border);background:var(--bg-secondary);color:var(--text-secondary);cursor:pointer;font-family:inherit;">로그아웃</button>
+      </div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card"><div class="label">전체 센서</div><div class="value" id="summary-sensor">-</div></div>
+      <div class="summary-card"><div class="label">이상 발생</div><div class="value danger" id="summary-alert">-</div></div>
+      <div class="summary-card"><div class="label">현재 소비전력</div><div class="value" id="summary-watt">-</div></div>
+      <div class="summary-card"><div class="label">에너지 절감률</div><div class="value success" id="summary-efficiency">-</div></div>
+    </div>
+
+    <div class="main-grid">
+      <div class="card">
+        <div class="card-title">센서 현황 및 제어</div>
+        <div class="room-list">
+
+          <div class="room-item" data-room="101">
+            <div class="room-top">
+              <div>
+                <div class="room-name">room-101 · 1층 회의실</div>
+                <div class="room-sub">온도 24.5° / 습도 60% / 움직임 있음</div>
+              </div>
+              <span class="badge normal">정상</span>
+            </div>
+            <div class="room-bottom">
+              <button class="ctrl-btn on" data-device="조명" onclick="manualToggle(this)">조명 ON</button>
+              <button class="ctrl-btn on" data-device="에어컨" onclick="manualToggle(this)">에어컨 ON</button>
+            </div>
+          </div>
+
+          <div class="room-item" data-room="102">
+            <div class="room-top">
+              <div>
+                <div class="room-name">room-102 · 1층 사무실</div>
+                <div class="room-sub">온도 41.0° / 습도 95% / 움직임 있음</div>
+              </div>
+              <span class="badge anomaly">이상</span>
+            </div>
+            <div class="room-bottom">
+              <button class="ctrl-btn on" data-device="조명" onclick="manualToggle(this)">조명 ON</button>
+              <button class="ctrl-btn" data-device="에어컨" onclick="manualToggle(this)">에어컨 OFF</button>
+            </div>
+          </div>
+
+          <div class="room-item" data-room="103">
+            <div class="room-top">
+              <div>
+                <div class="room-name">room-103 · 2층 회의실</div>
+                <div class="room-sub">온도 22.0° / 습도 55% / 움직임 없음</div>
+              </div>
+              <span class="badge normal">정상</span>
+            </div>
+            <div class="room-bottom">
+              <button class="ctrl-btn" data-device="조명" onclick="manualToggle(this)">조명 OFF</button>
+              <button class="ctrl-btn" data-device="에어컨" onclick="manualToggle(this)">에어컨 OFF</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">이상 이벤트</div>
+        <div class="alert-list">
+          <div class="alert-item">
+            <div class="alert-dot danger"></div>
+            <div>
+              <div class="alert-title">room-102 온도 이상 (41.0°)</div>
+              <div class="alert-sub">09:28 · 긴급 알림 자동 전송</div>
+            </div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-dot danger"></div>
+            <div>
+              <div class="alert-title">room-102 습도 이상 (95%)</div>
+              <div class="alert-sub">09:28 · 환기 명령 자동 전송</div>
+            </div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-dot warning"></div>
+            <div>
+              <div class="alert-title">room-101 새벽 움직임 감지</div>
+              <div class="alert-sub">03:20 · 경보 알림 전송</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="energy-grid">
+      <div class="energy-card">
+        <div class="energy-label">오늘 누적 전력량</div>
+        <div class="energy-value" id="energy-daily">- kWh</div>
+        <div class="energy-sub" id="energy-daily-sub">어제 대비 -</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:60%;background:#1D9E75"></div></div>
+      </div>
+      <div class="energy-card">
+        <div class="energy-label">자동 제어 비율</div>
+        <div class="energy-value" id="energy-efficiency">-%</div>
+        <div class="energy-sub" id="energy-efficiency-sub">수동 개입 -% </div>
+        <div class="progress-bar"><div class="progress-fill" id="energy-efficiency-bar" style="width:0%;background:#1D9E75"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">제어 이력</div>
+      <div class="log-list" id="log">
+        <div class="log-item">
+          <span class="log-text">room-101 조명 ON</span>
+          <div class="log-right"><span class="log-type auto">자동</span><span class="log-time">09:00:00</span></div>
+        </div>
+        <div class="log-item">
+          <span class="log-text">room-102 에어컨 OFF</span>
+          <div class="log-right"><span class="log-type manual">수동</span><span class="log-time">09:15:00</span></div>
+        </div>
+        <div class="log-item">
+          <span class="log-text">room-103 조명 OFF</span>
+          <div class="log-right"><span class="log-type auto">자동</span><span class="log-time">09:20:00</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // 인증 체크 - 토큰 없으면 로그인 페이지로
+    const TOKEN = localStorage.getItem('iot_token');
+    if (!TOKEN) location.href = 'login.html';
+
+    function logout() {
+      localStorage.removeItem('iot_token');
+      location.href = 'login.html';
+    }
+
+    function authFetch(url, options = {}) {
+      return fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + TOKEN,
+          ...(options.headers || {})
+        }
+      });
+    }
+
+    function updateClock() {
+      document.getElementById('clock').textContent = new Date().toLocaleString('ko-KR');
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    function addLog(room, device, action, type) {
+      const time = new Date().toTimeString().slice(0, 8);
+      const log = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = 'log-item';
+      entry.innerHTML = `
+        <span class="log-text">room-${room} ${device} ${action}</span>
+        <div class="log-right">
+          <span class="log-type ${type}">${type === 'manual' ? '수동' : '자동'}</span>
+          <span class="log-time">${time}</span>
+        </div>`;
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function updateBtn(btn, action) {
+      const device = btn.dataset.device;
+      btn.textContent = device + ' ' + action;
+      btn.className = 'ctrl-btn' + (action === 'ON' ? ' on' : '');
+    }
+
+    // 수동 제어 - 버튼 클릭 시
+    async function manualToggle(btn) {
+      const isOn      = btn.textContent.includes('ON');
+      const newAction = isOn ? 'OFF' : 'ON';
+      const dataRoom  = btn.closest('.room-item').dataset.room;
+      const device    = btn.dataset.device;
+
+      updateBtn(btn, newAction);
+      addLog(dataRoom, device, newAction, 'manual');
+
+      try {
+        await authFetch('http://localhost:8080/v1/control', {
+          method: 'POST',
+          body: JSON.stringify({
+            room_id:   DATA_ROOM_TO_DB[dataRoom],
+            device_id: DEVICE_ID_MAP[device],
+            action:    newAction
+          })
+        });
+      } catch (e) {}
+    }
+
+    function autoControl(room, device, action) {
+      const roomEl = document.querySelector(`.room-item[data-room="${room}"]`);
+      if (!roomEl) return;
+      const btn = Array.from(roomEl.querySelectorAll('.ctrl-btn'))
+        .find(b => b.dataset.device === device);
+      if (!btn) return;
+      updateBtn(btn, action);
+      addLog(room, device, action, 'auto');
+    }
+
+    // DB roomId(1,2,3) → HTML data-room(101,102,103) 매핑
+    const ROOM_ID_MAP     = { 1: '101', 2: '102', 3: '103' };
+    const ROOM_NAME_MAP   = { 1: '1층 회의실', 2: '1층 사무실', 3: '2층 회의실' };
+    const DATA_ROOM_TO_DB = { '101': '1', '102': '2', '103': '3' };
+    const DEVICE_ID_MAP   = { '조명': '1', '에어컨': '2' };
+
+    function updateRoomSensor(data) {
+      const dataRoom = ROOM_ID_MAP[data.roomId];
+      if (!dataRoom) return;
+      const roomEl = document.querySelector(`.room-item[data-room="${dataRoom}"]`);
+      if (!roomEl) return;
+
+      const temp    = data.temperature != null ? `온도 ${parseFloat(data.temperature).toFixed(1)}°` : null;
+      const hum     = data.humidity    != null ? `습도 ${parseFloat(data.humidity).toFixed(0)}%`    : null;
+      const motion  = data.motion      != null ? (data.motion === 1 ? '움직임 있음' : '움직임 없음') : null;
+      const parts   = [temp, hum, motion].filter(Boolean);
+      roomEl.querySelector('.room-sub').textContent = parts.join(' / ');
+
+      const badge = roomEl.querySelector('.badge');
+      if (data.motion === 0 && data.temperature == null && data.humidity == null) {
+        badge.className = 'badge empty';
+        badge.textContent = '공실';
+      } else if (data.status === 'ANOMALY') {
+        badge.className = 'badge anomaly';
+        badge.textContent = '이상';
+      } else {
+        badge.className = 'badge normal';
+        badge.textContent = '정상';
+      }
+
+      updateAnomalyCount();
+    }
+
+    async function fetchEnergy() {
+      try {
+        const [dailyRes, efficiencyRes] = await Promise.all([
+          authFetch('http://localhost:8080/v1/energy/daily'),
+          authFetch('http://localhost:8080/v1/energy/efficiency')
+        ]);
+        const daily      = await dailyRes.json();
+        const efficiency = await efficiencyRes.json();
+
+        document.getElementById('energy-daily').textContent = parseFloat(daily.totalWh).toFixed(4) + ' kWh';
+
+        const subEl = document.getElementById('energy-daily-sub');
+        if (daily.yesterdayDiffWh != null) {
+          const diff = parseFloat(daily.yesterdayDiffWh);
+          const sign = diff >= 0 ? '+' : '';
+          subEl.textContent = '어제 대비 ' + sign + diff.toFixed(4) + ' kWh';
+        } else {
+          subEl.textContent = '어제 데이터 없음';
+        }
+
+        const eff = efficiency.efficiency;
+        document.getElementById('energy-efficiency').textContent     = eff + '%';
+        document.getElementById('energy-efficiency-sub').textContent = '수동 개입 ' + (100 - eff) + '%';
+        document.getElementById('energy-efficiency-bar').style.width = eff + '%';
+      } catch (e) {}
+    }
+
+    async function fetchSummary() {
+      try {
+        const res  = await authFetch('http://localhost:8080/v1/dashboard/summary');
+        const data = await res.json();
+        document.getElementById('summary-sensor').textContent     = data.totalSenorCount + '개';
+        document.getElementById('summary-alert').textContent      = data.totalAlertCount + '건';
+        document.getElementById('summary-watt').textContent       = data.currentTotalWatt.toLocaleString() + 'W';
+        document.getElementById('summary-efficiency').textContent = data.efficiency + '%';
+      } catch (e) {}
+    }
+
+    function updateAnomalyCount() {
+      fetchSummary();
+    }
+
+    function addAlert(data) {
+      const dataRoom = ROOM_ID_MAP[data.roomId];
+      const time = new Date().toTimeString().slice(0, 5);
+      const alertList = document.querySelector('.alert-list');
+
+      const roomName = ROOM_NAME_MAP[data.roomId] || `room-${dataRoom}`;
+      const reasons = [];
+      if (data.sensorType === 'DHT22') {
+        if (data.temperature != null && parseFloat(data.temperature) > 30) reasons.push(`온도가 임계값(30.0°C)을 초과했습니다. 현재: ${parseFloat(data.temperature).toFixed(1)}°C`);
+        if (data.humidity    != null && parseFloat(data.humidity)    > 80) reasons.push(`습도가 임계값(80.0%)을 초과했습니다. 현재: ${parseFloat(data.humidity).toFixed(0)}%`);
+      }
+      if (data.sensorType === 'PIR') {
+        if (data.motion != null && data.motion === 1) reasons.push('야간 모션이 감지되었습니다.');
+      }
+      const title = `${roomName} · ${reasons.length > 0 ? reasons.join(' / ') : '이상 감지'}`;
+
+      const item = document.createElement('div');
+      item.className = 'alert-item';
+      item.innerHTML = `
+        <div class="alert-dot danger"></div>
+        <div>
+          <div class="alert-title">${title}</div>
+          <div class="alert-sub">${time} · 실시간 알림</div>
+        </div>`;
+      alertList.appendChild(item);
+      alertList.scrollTop = alertList.scrollHeight;
+    }
+
+    async function fetchControlLogs() {
+      try {
+        const res  = await authFetch('http://localhost:8080/v1/control/logs');
+        const list = await res.json();
+        const log  = document.getElementById('log');
+        log.innerHTML = '';
+        list.forEach(data => {
+          const type  = data.type === 'MANUAL' ? 'manual' : 'auto';
+          const label = type === 'manual' ? '수동' : '자동';
+          const entry = document.createElement('div');
+          entry.className = 'log-item';
+          entry.innerHTML = `
+            <span class="log-text">${data.roomName} ${data.deviceName} ${data.action}</span>
+            <div class="log-right">
+              <span class="log-type ${type}">${label}</span>
+              <span class="log-time">${data.createdAt}</span>
+            </div>`;
+          log.appendChild(entry);
+        });
+        log.scrollTop = log.scrollHeight;
+      } catch (e) {}
+    }
+
+    async function fetchAlerts() {
+      try {
+        const res       = await authFetch('http://localhost:8080/v1/alerts');
+        const list      = await res.json();
+        const alertList = document.querySelector('.alert-list');
+        alertList.innerHTML = '';
+        list.forEach(data => {
+          const time     = new Date(data.createdAt).toTimeString().slice(0, 5);
+          const dotClass = data.type === 'NIGHT_MOTION' ? 'warning' : 'danger';
+          const item     = document.createElement('div');
+          item.className = 'alert-item';
+          item.innerHTML = `
+            <div class="alert-dot ${dotClass}"></div>
+            <div>
+              <div class="alert-title">${data.roomName} · ${data.message}</div>
+              <div class="alert-sub">${time}</div>
+            </div>`;
+          alertList.appendChild(item);
+        });
+        alertList.scrollTop = alertList.scrollHeight;
+      } catch (e) {}
+    }
+
+    async function fetchRoomDeviceStatuses() {
+      try {
+        await Promise.all([1, 2, 3].map(async roomId => {
+          const res  = await authFetch(`http://localhost:8080/v1/rooms/${roomId}/devices`);
+          const list = await res.json();
+          const dataRoom = ROOM_ID_MAP[roomId];
+          const roomEl  = document.querySelector(`.room-item[data-room="${dataRoom}"]`);
+          if (!roomEl) return;
+          list.forEach(d => {
+            const btn = Array.from(roomEl.querySelectorAll('.ctrl-btn'))
+              .find(b => b.dataset.device === d.deviceName);
+            if (btn) updateBtn(btn, d.status);
+          });
+        }));
+      } catch (e) {}
+    }
+
+    fetchSummary();
+    fetchEnergy();
+    fetchControlLogs();
+    fetchAlerts();
+    fetchRoomDeviceStatuses();
+    setInterval(fetchEnergy, 2000);
+    setInterval(fetchSummary, 2000);
+
+    function applyAutoControl(data) {
+      const dataRoom = ROOM_ID_MAP[data.roomId];
+      if (!dataRoom) return;
+      const roomEl = document.querySelector(`.room-item[data-room="${dataRoom}"]`);
+      if (!roomEl) return;
+      const btn = Array.from(roomEl.querySelectorAll('.ctrl-btn'))
+        .find(b => b.dataset.device === data.deviceName);
+      if (!btn) return;
+      updateBtn(btn, data.action);
+      addLog(dataRoom, data.deviceName, data.action, 'auto');
+    }
+
+    // WebSocket 연결
+    (function connectWS() {
+      const socket = new SockJS('http://localhost:8080/ws');
+      const stomp  = Stomp.over(socket);
+      stomp.debug  = null;
+
+      stomp.connect({}, () => {
+        [1, 2, 3].forEach(roomId => {
+          stomp.subscribe(`/topic/rooms/${roomId}`,          msg => updateRoomSensor(JSON.parse(msg.body)));
+          stomp.subscribe(`/topic/rooms/${roomId}/alerts`,   msg => addAlert(JSON.parse(msg.body)));
+          stomp.subscribe(`/topic/rooms/${roomId}/control`,  msg => applyAutoControl(JSON.parse(msg.body)));
+        });
+      }, () => {
+        setTimeout(connectWS, 3000);
+      });
+    })();
+  </script>
+</body>
+</html>

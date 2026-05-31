@@ -5,8 +5,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface DeviceRepository extends JpaRepository<Device, Long> {
+
+    Optional<Device> findByName(String name);
     @Query("""
                     select sum(d.powerWatt)
                     from Device d join RoomDevice r on d.id=r.device.id                             
