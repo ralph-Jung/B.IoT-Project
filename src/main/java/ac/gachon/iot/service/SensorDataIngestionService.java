@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -53,12 +55,14 @@ public class SensorDataIngestionService {
         SensorStatus status = determineStatus(payload, sensor.getSensorType().getName());
         sensorDataRepository.save(SensorData.create(sensor, payload, status));
 
+        List<Runnable> postCommitActions = new ArrayList<>();
+
         if (status == SensorStatus.ANOMALY) {
             List<AlertType> alertTypes = resolveAlertTypes(payload, sensor.getSensorType().getName());
             for (AlertType alertType : alertTypes) {
                 String alertMessage = resolveAlertMessage(alertType, payload);
                 alertLogRepository.save(AlertLog.create(sensor, alertType, alertMessage));
-                alertEmailService.sendAlert(identifier, alertType, alertMessage);
+                postCommitActions.add(() -> alertEmailService.sendAlert(identifier, alertType, alertMessage));
                 log.warn("Anomaly detected. identifier={}, alertType={}, message={}", identifier, alertType, alertMessage);
             }
         }
@@ -76,10 +80,18 @@ public class SensorDataIngestionService {
                 .status(status.name())
                 .createdAt(OffsetDateTime.now())
                 .build();
-        messagingTemplate.convertAndSend("/topic/rooms/" + message.getRoomId(), message);
-        if (status == SensorStatus.ANOMALY) {
-            messagingTemplate.convertAndSend("/topic/rooms/" + message.getRoomId() + "/alerts", message);
-        }
+
+        // 트랜잭션 커밋 후 외부 알림 발행 — 롤백 시 알림이 발송되지 않도록 보장
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                messagingTemplate.convertAndSend("/topic/rooms/" + message.getRoomId(), message);
+                if (status == SensorStatus.ANOMALY) {
+                    messagingTemplate.convertAndSend("/topic/rooms/" + message.getRoomId() + "/alerts", message);
+                }
+                postCommitActions.forEach(Runnable::run);
+            }
+        });
 
         // 자동 제어는 센서 저장 트랜잭션과 분리 — 제어 실패가 센서 저장에 영향 주지 않음
         tryAutoControl(sensor, payload, status);
