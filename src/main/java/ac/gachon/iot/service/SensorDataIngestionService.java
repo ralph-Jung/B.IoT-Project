@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -35,6 +37,7 @@ public class SensorDataIngestionService {
     private final SimpMessagingTemplate messagingTemplate;
     private final ControlService controlService;
     private final DeviceRepository deviceRepository;
+    private final AlertEmailService alertEmailService;
 
     @Value("${sensor.threshold.temperature.max:30.0}")
     private BigDecimal temperatureMax;
@@ -51,10 +54,13 @@ public class SensorDataIngestionService {
         sensorDataRepository.save(SensorData.create(sensor, payload, status));
 
         if (status == SensorStatus.ANOMALY) {
-            AlertType alertType = resolveAlertType(payload);
-            String alertMessage = resolveAlertMessage(alertType, payload);
-            alertLogRepository.save(AlertLog.create(sensor, alertType, alertMessage));
-            log.warn("Anomaly detected. identifier={}, alertType={}, message={}", identifier, alertType, alertMessage);
+            List<AlertType> alertTypes = resolveAlertTypes(payload, sensor.getSensorType().getName());
+            for (AlertType alertType : alertTypes) {
+                String alertMessage = resolveAlertMessage(alertType, payload);
+                alertLogRepository.save(AlertLog.create(sensor, alertType, alertMessage));
+                alertEmailService.sendAlert(identifier, alertType, alertMessage);
+                log.warn("Anomaly detected. identifier={}, alertType={}, message={}", identifier, alertType, alertMessage);
+            }
         }
 
         log.info("SensorData ingested. identifier={}, status={}", identifier, status);
@@ -89,8 +95,10 @@ public class SensorDataIngestionService {
             }
 
             if (status == SensorStatus.ANOMALY && "DHT22".equals(sensorTypeName)) {
-                AlertType alertType = resolveAlertType(payload);
-                if (alertType == AlertType.HIGH_TEMP || alertType == AlertType.HIGH_HUMIDITY) {
+                List<AlertType> alertTypes = resolveAlertTypes(payload, sensorTypeName);
+                boolean hasThermalAnomaly = alertTypes.stream()
+                        .anyMatch(t -> t == AlertType.HIGH_TEMP || t == AlertType.HIGH_HUMIDITY);
+                if (hasThermalAnomaly) {
                     deviceRepository.findByName("에어컨").ifPresent(aircon ->
                             controlService.autoControl(sensor.getRoom(), aircon, DeviceStatus.ON));
                 }
@@ -129,14 +137,20 @@ public class SensorDataIngestionService {
         return hour >= 22 || hour < 6;
     }
 
-    private AlertType resolveAlertType(MqttSensorPayload payload) {
-        if (payload.temperature() != null && payload.temperature().compareTo(temperatureMax) > 0) {
-            return AlertType.HIGH_TEMP;
+    private List<AlertType> resolveAlertTypes(MqttSensorPayload payload, String sensorType) {
+        List<AlertType> types = new ArrayList<>();
+        if ("DHT22".equals(sensorType)) {
+            if (payload.temperature() != null && payload.temperature().compareTo(temperatureMax) > 0) {
+                types.add(AlertType.HIGH_TEMP);
+            }
+            if (payload.humidity() != null && payload.humidity().compareTo(humidityMax) > 0) {
+                types.add(AlertType.HIGH_HUMIDITY);
+            }
         }
-        if (payload.humidity() != null && payload.humidity().compareTo(humidityMax) > 0) {
-            return AlertType.HIGH_HUMIDITY;
+        if ("PIR".equals(sensorType) && payload.motion() != null && payload.motion() == 1 && isNightTime()) {
+            types.add(AlertType.NIGHT_MOTION);
         }
-        return AlertType.NIGHT_MOTION;
+        return types;
     }
 
     private String resolveAlertMessage(AlertType alertType, MqttSensorPayload payload) {
