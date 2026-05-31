@@ -14,7 +14,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AlertController {
 
-    public final AlertLogService alertLogService;
+    private final AlertLogService alertLogService;
 
     @GetMapping("/v1/alerts")
     public List<AlertLogResponse> getAlerts() {

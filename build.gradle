@@ -46,6 +46,9 @@ dependencies {
     // Mail
     implementation 'org.springframework.boot:spring-boot-starter-mail'
 
+    // Password encoding
+    implementation 'org.springframework.security:spring-security-crypto'
+
     //MQTT
     implementation 'org.springframework.boot:spring-boot-starter-integration'
     implementation 'org.springframework.integration:spring-integration-mqtt'
